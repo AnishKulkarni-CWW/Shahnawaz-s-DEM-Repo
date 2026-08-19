@@ -1,0 +1,1 @@
+{"timestamp": "2026-08-19T11:38:44", "project_name": "Unknown Project", "variant": "PPTX Reference Audit", "overall_score": 90.8, "counts": {"PASS": 56, "FAIL": 15, "WARNING": 10, "INFO": 8, "MANUAL_REVIEW": 26, "NOT_CHECKED": 3}, "total_checks": 118}

@@ -1,0 +1,10 @@
+{
+  "name": "Generic Emailer Rules",
+  "cta_font_size_min_px": null,
+  "cta_font_size_max_px": null,
+  "cta_border_radius_min_px": null,
+  "cta_background_color": null,
+  "spacing_tolerance_px": 2,
+  "case_sensitive": true,
+  "japanese_punctuation_strict": true
+}
