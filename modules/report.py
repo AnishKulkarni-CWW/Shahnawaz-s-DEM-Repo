@@ -5,6 +5,7 @@ Builds the exportable audit report in CSV and self-contained HTML form.
 """
 
 import io
+import re
 import csv
 from datetime import datetime
 from .models import Status
@@ -17,6 +18,21 @@ STATUS_FILL_HEX = {
     Status.MANUAL_REVIEW: "E9D8FD",
     Status.NOT_CHECKED: "E2E8F0",
 }
+
+# openpyxl raises IllegalCharacterError for raw control characters (ASCII
+# 0-31 except tab/newline/carriage-return) in a cell value — these can show
+# up in real audit data when messy source HTML/footer text is echoed back
+# into a finding's title/actual/etc. Stripped here rather than letting one
+# bad string crash the entire Excel export.
+_ILLEGAL_XLSX_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def _xlsx_safe(value):
+    """Strip characters openpyxl refuses to write to a worksheet cell.
+    Non-string values (numbers, None) pass through unchanged."""
+    if isinstance(value, str):
+        return _ILLEGAL_XLSX_CHARS_RE.sub("", value)
+    return value
 
 def issues_to_csv(issues: list) -> bytes:
     buf = io.StringIO()
@@ -156,7 +172,7 @@ def build_excel_report(project_name: str, variant_name: str, scores: dict, issue
     ws["A4"].font = normal
     ws["A6"] = "Overall QA Score"
     ws["A6"].font = bold
-    ws["B6"] = scores["overall"] if scores["overall"] is not None else "N/A"
+    ws["B6"] = _xlsx_safe(scores["overall"] if scores["overall"] is not None else "N/A")
     ws["B6"].font = Font(name="Arial", bold=True, size=16,
                           color="2F855A" if (scores["overall"] or 0) >= 90 else "C05621")
 
@@ -167,8 +183,8 @@ def build_excel_report(project_name: str, variant_name: str, scores: dict, issue
         ws[c].fill = header_fill
     row = 9
     for cat, sc in sorted(scores["by_category"].items(), key=lambda x: (x[1] is None, x[0])):
-        ws.cell(row=row, column=1, value=cat).font = normal
-        ws.cell(row=row, column=2, value=sc if sc is not None else "Manual review only").font = normal
+        ws.cell(row=row, column=1, value=_xlsx_safe(cat)).font = normal
+        ws.cell(row=row, column=2, value=_xlsx_safe(sc if sc is not None else "Manual review only")).font = normal
         row += 1
 
     row += 1
@@ -178,8 +194,8 @@ def build_excel_report(project_name: str, variant_name: str, scores: dict, issue
     ws.cell(row=row, column=2).fill = header_fill
     row += 1
     for status, count in scores["counts"].items():
-        ws.cell(row=row, column=1, value=f"STATUS: {status.label}").font = normal
-        ws.cell(row=row, column=2, value=count).font = normal
+        ws.cell(row=row, column=1, value=_xlsx_safe(f"STATUS: {status.label}")).font = normal
+        ws.cell(row=row, column=2, value=_xlsx_safe(count)).font = normal
         row += 1
 
     ws.column_dimensions["A"].width = 28
@@ -198,8 +214,8 @@ def build_excel_report(project_name: str, variant_name: str, scores: dict, issue
             cell.alignment = Alignment(wrap_text=True, vertical="center")
         for r, g in enumerate(checklist_groups, start=2):
             item = g["item"]
-            values = [item.number, f"STATUS: {g['status'].label}", item.text_en, item.text_ja or "",
-                      item.dev_status or "", item.source_sheet, len(g["supporting"]), g["reason"] or ""]
+            values = [_xlsx_safe(item.number), _xlsx_safe(f"STATUS: {g['status'].label}"), _xlsx_safe(item.text_en), _xlsx_safe(item.text_ja or ""),
+                      _xlsx_safe(item.dev_status or ""), _xlsx_safe(item.source_sheet), len(g["supporting"]), _xlsx_safe(g["reason"] or "")]
             fill = PatternFill("solid", fgColor=STATUS_FILL_HEX.get(g["status"], "FFFFFF"))
             for c, val in enumerate(values, start=1):
                 cell = ws_cl.cell(row=r, column=c, value=val)
@@ -222,10 +238,10 @@ def build_excel_report(project_name: str, variant_name: str, scores: dict, issue
         cell.alignment = Alignment(wrap_text=True, vertical="center")
 
     for r, issue in enumerate(issues, start=2):
-        values = [issue.id, issue.category, f"{issue.severity.code} — {issue.severity.value}",
-                  f"STATUS: {issue.status.label}", issue.title, issue.expected or "",
-                  issue.actual or "", issue.difference or "", issue.location or "",
-                  issue.recommendation or "", issue.workflow_status]
+        values = [issue.id, _xlsx_safe(issue.category), _xlsx_safe(f"{issue.severity.code} — {issue.severity.value}"),
+                  _xlsx_safe(f"STATUS: {issue.status.label}"), _xlsx_safe(issue.title), _xlsx_safe(issue.expected or ""),
+                  _xlsx_safe(issue.actual or ""), _xlsx_safe(issue.difference or ""), _xlsx_safe(issue.location or ""),
+                  _xlsx_safe(issue.recommendation or ""), _xlsx_safe(issue.workflow_status)]
         fill = PatternFill("solid", fgColor=STATUS_FILL_HEX.get(issue.status, "FFFFFF"))
         for c, val in enumerate(values, start=1):
             cell = ws2.cell(row=r, column=c, value=val)
